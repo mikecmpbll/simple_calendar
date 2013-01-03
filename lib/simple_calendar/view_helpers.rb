@@ -2,16 +2,21 @@ module SimpleCalendar
   module ViewHelpers
 
     def calendar(events, options={}, &block)
+      raise 'SimpleCalendar requires a block to be passed in' unless block_given?
+
+
       opts = {
           :year       => (params[:year] || Time.zone.now.year).to_i,
           :month      => (params[:month] || Time.zone.now.month).to_i,
           :prev_text  => raw("&laquo;"),
-          :next_text  => raw("&raquo;")
+          :next_text  => raw("&raquo;"),
+          :start_day  => :sunday
       }
       options.reverse_merge! opts
+      events       ||= []
       selected_month = Date.civil(options[:year], options[:month])
       current_date   = Date.today
-      range          = build_range selected_month
+      range          = build_range selected_month, options
       month_array    = build_month range
 
       draw_calendar(selected_month, month_array, current_date, events, options, block)
@@ -19,14 +24,14 @@ module SimpleCalendar
 
     private
 
-    def build_range(selected_month)
+    def build_range(selected_month, options)
       start_date = selected_month.beginning_of_month
-      start_date = start_date.sunday? ? start_date : start_date.beginning_of_week(:sunday)
+      start_date = start_date.send(options[:start_day].to_s+'?') ? start_date : start_date.beginning_of_week(options[:start_day])
 
       end_date   = selected_month.end_of_month
-      end_date   = end_date.saturday? ? end_date : end_date.end_of_week(:sunday)
+      end_date   = end_date.saturday? ? end_date : end_date.end_of_week(options[:start_day])
 
-      date_range = (start_date..end_date).to_a
+      (start_date..end_date).to_a
     end
 
     def build_month(date_range)
@@ -73,7 +78,7 @@ module SimpleCalendar
                     divs = []
 
                     concat content_tag(:div, date.day.to_s, :class=>"day_number")
-                    divs << day_events(date, events).collect {|event| block.call(event) }
+                    divs << day_events(date, events).collect { |event| block.call(event) }
                     divs.join.html_safe
                   end #content_tag :div
                 end #content_tag :td
@@ -90,7 +95,7 @@ module SimpleCalendar
 
     # Returns an array of events for a given day
     def day_events(date, events)
-      events.select { |e| e.start_time_column.to_date == date }
+      events.select { |e| e.start_time.to_date == date }
     end
 
     # Generates the header that includes the month and next and previous months
